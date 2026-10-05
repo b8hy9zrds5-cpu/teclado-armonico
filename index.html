@@ -91,7 +91,10 @@ button:focus-visible{outline:2px solid var(--scale);outline-offset:2px}
 .rh .fg{background:var(--rh);color:#fff} .b.rh .fg{background:#fff;color:var(--rh)}
 .lh .fg{background:var(--lh);color:#fff} .b.lh .fg{background:#fff;color:var(--lh)}
 .root-mark{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}
-.k.hit{filter:brightness(.88)}
+.k.hit,.k.held{filter:brightness(.82)}
+.b.held{filter:brightness(1.6)}
+#kbUp{touch-action:none}
+.kbhead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
 .b.hit{filter:brightness(1.5)}
 
 .info{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:flex-start}
@@ -163,6 +166,7 @@ button:focus-visible{outline:2px solid var(--scale);outline-offset:2px}
       <div class="row"><div class="lab">Escala</div><div class="chips" id="scales"></div></div>
     </div>
     <div class="tipline"></div>
+    <div class="kbhead"><span class="hint" id="upHint">Toca y mantén para que la nota suene; desliza el dedo para pasar de una nota a otra sin cortar.</span><button class="chip sm" id="legato" type="button" data-tip="Mantén pulsado para sostener la nota y desliza para enlazar notas">Legato</button></div>
     <div class="kbwrap"><div class="kb" id="kbUp"></div></div>
     <div class="hint swipe">Desliza el teclado en horizontal para ver todo.</div>
     <div class="info">
@@ -316,7 +320,7 @@ const PROGS=[
  {id:'blues',lab:'Blues 12 compases',tip:'I7 ×4 · IV7 ×2 · I7 ×2 · V7 · IV7 · I7 · V7',fixed:[[0,'7'],[0,'7'],[0,'7'],[0,'7'],[5,'7'],[5,'7'],[0,'7'],[0,'7'],[7,'7'],[5,'7'],[0,'7'],[7,'7']]},
 ];
 
-const st={custom:[],fing:true,smooth:true,shift:0,loop:true,tempo:90,acc:'#',lock:true,tonic:0,scale:'maj',root:0,chord:'maj',inv:0,hands:1,lh:'r',dSev:false,muted:false};
+const st={legato:true,custom:[],fing:true,smooth:true,shift:0,loop:true,tempo:90,acc:'#',lock:true,tonic:0,scale:'maj',root:0,chord:'maj',inv:0,hands:1,lh:'r',dSev:false,muted:false};
 try{const s=JSON.parse(localStorage.getItem('teclado-armonico')||'null');if(s)Object.assign(st,s)}catch(e){}
 function save(){try{localStorage.setItem('teclado-armonico',JSON.stringify(st))}catch(e){}}
 
@@ -460,7 +464,7 @@ function buildKb(el,lo,hi,minKey){
   return keys;
 }
 const kbUp=document.getElementById('kbUp'),kbLow=document.getElementById('kbLow');
-const upKeys=buildKb(kbUp,60,83,36);
+const upKeys=buildKb(kbUp,60,83,25);
 const lowKeys=buildKb(kbLow,LO,HI,33);
 
 /* ---------- Sonido ---------- */
@@ -497,6 +501,16 @@ function tone(m,t,dur=1.8){
   o1.start(t);o2.start(t);o1.stop(t+dur+.05);o2.stop(t+dur+.05);
 }
 function flash(keys,m,delay=0){setTimeout(()=>{const k=keys[m];if(!k)return;k.classList.add('hit');setTimeout(()=>k.classList.remove('hit'),220)},delay*1000)}
+function startVoice(m){
+  const a=audio();if(!a)return null;const t=a.currentTime+.005;
+  const f=440*Math.pow(2,(m-69)/12),g=a.createGain(),lp=a.createBiquadFilter();
+  lp.type='lowpass';lp.frequency.setValueAtTime(Math.min(f*7,9000),t);lp.frequency.setTargetAtTime(Math.max(f*2.2,500),t,.6);
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.42,t+.008);g.gain.setTargetAtTime(.2,t+.01,.25);g.gain.setTargetAtTime(.09,t+.8,2.5);
+  const o1=a.createOscillator(),o2=a.createOscillator(),g2=a.createGain();
+  o1.type='triangle';o1.frequency.value=f;o2.type='sine';o2.frequency.value=f*2;g2.gain.value=.25;
+  o1.connect(lp);o2.connect(g2);g2.connect(lp);lp.connect(g);g.connect(master);o1.start(t);o2.start(t);
+  return{stop(){const n=a.currentTime;g.gain.cancelScheduledValues(n);g.gain.setValueAtTime(g.gain.value,n);g.gain.setTargetAtTime(0,n,.09);o1.stop(n+.7);o2.stop(n+.7)}};
+}
 function playNotes(keys,ms,gap=0){const a=audio();ms.forEach((m,i)=>{if(a)tone(m,a.currentTime+.01+i*gap,gap>.1?1.1:1.9);flash(keys,m,i*gap)})}
 
 /* ---------- Render ---------- */
@@ -522,7 +536,7 @@ function render(){
   const fing=st.fing?scaleFingers(sp):null;
   const fb=$('fing');fb.setAttribute('aria-pressed',st.fing);fb.disabled=sc.s.length!==7;fb.onclick=()=>{st.fing=!st.fing;render()};
   Object.entries(upKeys).forEach(([m,el])=>{
-    const pc=m%12,n=map[pc];el.className='k '+(BLACK.has(pc)?'b':'w')+(n?(n.tonic?' tn':' sc'):'');
+    const pc=m%12,n=map[pc];el.className='k '+(BLACK.has(pc)?'b':'w')+(n?(n.tonic?' tn':' sc'):' off');
     el.innerHTML=n?`<span class="nm">${n.name}</span><span class="dg">${n.deg}</span>${fing&&fing[pc]?`<span class="fg">${fing[pc]}</span>`:''}`:(BLACK.has(pc)?'':`<span class="oct">${LET[NAT.indexOf(pc)]}</span>`);
   });
   $('scTitle').innerHTML=`${sp.tonicName} <span class="q">${sc.t}</span>`;
@@ -617,6 +631,8 @@ function render(){
   $('tempo').value=st.tempo;$('tempoOut').textContent=`♩ = ${st.tempo}`;
   current=v;
   document.querySelectorAll('#accMode [data-acc]').forEach(b=>{b.setAttribute('aria-pressed',b.dataset.acc===st.acc);b.onclick=()=>{st.acc=b.dataset.acc;render()}});
+  const lg=$('legato');lg.setAttribute('aria-pressed',st.legato);lg.onclick=()=>{st.legato=!st.legato;render()};
+  $('upHint').textContent=st.legato?'Mantén pulsada una nota para que siga sonando y desliza para pasar a otra sin cortar.':'Toca una nota para oírla. Las notas en gris no son de la escala.';
   renderMute();
 }
 let current=null;
@@ -627,7 +643,22 @@ function renderMute(){const b=$('mute');b.setAttribute('aria-pressed',st.muted);
   b.innerHTML=st.muted?`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>Silenciado`:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 010 7M19 5a10 10 0 010 14"/></svg>Sonido`}
 $('mute').onclick=()=>{st.muted=!st.muted;if(st.muted&&ctx)ctx.suspend();render()};
 
-kbUp.addEventListener('click',e=>{const k=e.target.closest('.k');if(k)playNotes(upKeys,[+k.dataset.m])});
+// Teclado de escalas: legato (mantener y deslizar) o toque corto
+const held=new Map();// pointerId -> {key,voice}
+function keyAt(x,y){const el=document.elementFromPoint(x,y);const k=el&&el.closest&&el.closest('#kbUp .k');return k&&!k.classList.contains('off')?k:null}
+function release(id){const h=held.get(id);if(!h)return;if(h.voice)h.voice.stop();h.key.classList.remove('held');held.delete(id)}
+function press(id,k){
+  const h=held.get(id);if(h&&h.key===k)return;
+  const m=+k.dataset.m;
+  if(!st.legato){release(id);playNotes(upKeys,[m]);return}
+  const v=startVoice(m);k.classList.add('held');
+  if(h){if(h.voice)setTimeout(()=>h.voice.stop(),40);h.key.classList.remove('held')}// solapa un instante: sonido enlazado
+  held.set(id,{key:k,voice:v});
+}
+kbUp.addEventListener('pointerdown',e=>{const k=keyAt(e.clientX,e.clientY);if(!k)return;e.preventDefault();unlockAudio();press(e.pointerId,k)});
+document.addEventListener('pointermove',e=>{if(!held.has(e.pointerId)||!st.legato)return;const k=keyAt(e.clientX,e.clientY);if(k)press(e.pointerId,k)});
+['pointerup','pointercancel'].forEach(ev=>document.addEventListener(ev,e=>release(e.pointerId)));
+kbUp.addEventListener('contextmenu',e=>e.preventDefault());
 kbLow.addEventListener('click',e=>{const k=e.target.closest('.k');if(!k||k.classList.contains('off'))return;stopProg(true);st.root=(+k.dataset.m)%12;render();playChord()});
 $('playScale').onclick=()=>{const sp=spellScale();const base=60+st.tonic;const ms=sp.sc.s.map(s=>base+s);ms.push(base+12);playNotes(upKeys,ms,.28)};
 $('playChord').onclick=playChord;
