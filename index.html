@@ -180,22 +180,26 @@ button:focus-visible{outline:2px solid var(--scale);outline-offset:2px}
 .paper .card svg{width:100%;height:auto;display:block;margin-block:2px}
 .paper .lyrics{margin-top:40px;padding-top:24px;border-top:1px solid var(--paper-line)}
 .paper .lyrics>.lbl{display:block;margin-bottom:14px}
-.paper .lyrics pre{font-family:var(--f-sheet);font-size:12.5px;line-height:1.65;white-space:pre-wrap;margin:0;columns:2;column-gap:44px;color:var(--paper-ink)}
-@media (max-width:600px){.paper .lyrics pre{columns:1}}
+.paper .lycols{display:grid;grid-template-columns:1fr 1fr;gap:0 44px}
+.paper .lycols p{font-size:12.5px;line-height:1.65;white-space:pre-wrap;margin:0 0 1.3em;color:var(--paper-ink);break-inside:avoid}
+@media (max-width:600px){.paper .lycols{grid-template-columns:1fr}}
 .paper .legend{display:flex;gap:18px;flex-wrap:wrap;font-size:10.5px;color:var(--paper-muted);margin-top:14px}
 .paper .legend span{display:inline-flex;align-items:center;gap:6px}
 .paper .legend em{width:9px;height:9px;border-radius:2px;display:inline-block}
 .paper .foot{margin-top:44px;padding-top:10px;border-top:1px solid var(--paper-line);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
 @media print{
-  @page{size:A4;margin:16mm 15mm}
+  @page{size:A4;margin:15mm 15.5mm}
   html,body{background:#fff!important;padding:0!important;margin:0!important}
   body>*:not(#sheet){display:none!important}
   #sheet{position:static!important;overflow:visible!important;background:#fff!important}
   .sheet-bar{display:none!important}
   .paper{box-shadow:none!important;margin:0!important;padding:0!important;max-width:none!important;border-radius:0}
+  /* Safari ignora los márgenes de @page y usa 6,35 mm: se completan aquí hasta igualar la pantalla */
+  html.webkit .paper{padding:8.5mm 9mm!important}
   .paper .cards{grid-template-columns:repeat(3,1fr)!important}
   .paper .bars{grid-template-columns:repeat(4,1fr)!important}
-  .paper .lyrics pre{columns:2!important}
+  .paper .lycols{grid-template-columns:1fr 1fr!important}
+  .paper .lyrics{break-inside:avoid}
   .paper .card,.paper .bar,.paper .meta{break-inside:avoid}
   .paper .sec>.lbl{break-after:avoid}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
@@ -287,8 +291,9 @@ button:focus-visible{outline:2px solid var(--scale);outline-offset:2px}
       <div class="row"><div class="lab">Progresión</div><div class="chips" id="progs"></div></div>
       <div class="row"><div class="lab">Tus temas</div>
         <form class="custom" id="cForm" autocomplete="off">
-          <input id="cTitle" type="text" placeholder="Título del tema" aria-label="Título del tema">
-          <input id="cAlbum" type="text" placeholder="Disco" aria-label="Disco">
+          <input id="cTitle" type="text" list="dlSongs" placeholder="Título del tema" aria-label="Título del tema">
+          <input id="cAlbum" type="text" list="dlAlbums" placeholder="Disco" aria-label="Disco">
+          <datalist id="dlSongs"></datalist><datalist id="dlAlbums"></datalist>
           <input id="cYear" type="number" inputmode="numeric" min="1900" max="2100" placeholder="Año" aria-label="Año de publicación" style="flex:0 0 96px;min-width:0">
           <textarea id="cIn" rows="4" placeholder="Intro: Lam Fa&#10;Estrofa: Lam Fa Do Sol&#10;Estribillo: Fa Sol Do Lam" aria-label="Acordes por secciones"></textarea>
           <textarea id="cLyrics" rows="5" placeholder="Letra (opcional)" aria-label="Letra del tema"></textarea>
@@ -614,6 +619,7 @@ function playNotes(keys,ms,gap=0){const a=audio();ms.forEach((m,i)=>{if(a)tone(m
 
 /* ---------- Render ---------- */
 const $=id=>document.getElementById(id);
+if(/AppleWebKit/.test(navigator.userAgent)&&!/Chrome|CriOS|Chromium|Edg|FxiOS|Android/.test(navigator.userAgent))document.documentElement.classList.add('webkit');
 function chipGroup(el,items,isOn,onClick){
   el.innerHTML='';
   items.forEach(it=>{if(it.sep){const s=document.createElement('span');s.className='sep';el.appendChild(s);return}
@@ -790,6 +796,30 @@ $('cForm').addEventListener('submit',e=>{e.preventDefault();const txt=$('cIn').v
 $('cNew').onclick=()=>{editIdx=null;['cTitle','cIn','cAlbum','cYear','cLyrics'].forEach(id=>$(id).value='');stopProg(true);if(progSel&&progSel[0]==='c')progSel=null;$('cMsg').classList.remove('err');$('cMsg').textContent='Escribe el título y los acordes, una línea por sección, y pulsa Guardar.';render();$('cTitle').focus()};
 $('cDel').onclick=()=>{if(editIdx===null)return;st.custom.splice(editIdx,1);editIdx=null;['cTitle','cIn','cAlbum','cYear','cLyrics'].forEach(id=>$(id).value='');stopProg(true);progSel=null;render()};
 
+/* ---------- Discografía (sugerencias de título y disco) ---------- */
+const DISCOS=[
+ ['Maqueta',2001,['Armas y máquinas']],
+ ['El cielo de antenas',2002,['La espuma de los días','Sería estupendo','Cientos de cosas','Claudia','Plásticos y metales','El final de la fiesta']],
+ ['Aventuras dentro de cajas',2004,['Invierno contigo','La tarde gira','Mantas de ruido','12:01 a.m.','Pregúntame mañana','Outubro']],
+ ['This is my country',2004,['A saudade entre os dedos']],
+ ['Todo el frío del mundo',2005,['Su primer contacto con el aire','Días como nubes','Incendio #3','El refugio','20.000 veces','Fugaz','Viaje al fin de la noche','Alguna forma habrá','O noso espazo','Antes de saberlo','Siempre te alejas en las tardes']],
+ ['Cuentos de Navidad',2006,['Escoita, a neve cae arredor']],
+ ['Hablaremos del miedo',2007,['Tú y cuántos como tú','Después de todo','El bosque','Frágil','Al final (todo arde)','La electricidad en el hueso','Todo o mundo protesta','La forma','A=B=C','Aceptar']],
+ ['La química que nos une',2008,['Septiembre no está tan lejos']],
+ ['Juegos Olímpicos',2008,['Evelyn Ashford']],
+ ['Luz, oscuridad, luz',2010,['1987','El sueño ardiendo','Sara dice','Siempre','Una nueva vida','Deshazte de mí','Sólo sombra','Me llamareis asesino','Cerca','Julie Christie','Coge mi mano, éste es el camino']],
+ ['Mañana y siempre',2025,['1997','Bailaremos','Aparecer','Valiente','Anillo','Flores']],
+];
+const norm=t=>t.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+$('dlSongs').innerHTML=DISCOS.flatMap(([d,y,ts])=>ts.map((t,i)=>`<option value="${esc(t)}">${esc(d)} · ${y} · ${String(i+1).padStart(2,'0')}</option>`)).join('');
+$('dlAlbums').innerHTML=DISCOS.map(([d,y])=>`<option value="${esc(d)}">${y}</option>`).join('');
+function fillFromTitle(){const v=norm($('cTitle').value);const hit=DISCOS.find(([d,y,ts])=>ts.some(t=>norm(t)===v));
+  if(hit){$('cTitle').value=hit[2].find(t=>norm(t)===v);$('cAlbum').value=hit[0];$('cYear').value=hit[1]}}
+function fillFromAlbum(){const v=norm($('cAlbum').value);const hit=DISCOS.find(([d])=>norm(d)===v);if(hit){$('cAlbum').value=hit[0];$('cYear').value=hit[1]}}
+const picked=e=>!e.inputType||e.inputType==='insertReplacementText';// elegido en la lista de sugerencias
+$('cTitle').addEventListener('input',e=>{if(picked(e))fillFromTitle()});$('cTitle').addEventListener('change',fillFromTitle);
+$('cAlbum').addEventListener('input',e=>{if(picked(e))fillFromAlbum()});$('cAlbum').addEventListener('change',fillFromAlbum);
+
 /* ---------- Hoja de acordes ---------- */
 const PC={rh:['#F7CFC6','#D24F39'],lh:['#DCD5F8','#6750CF']};
 function svgKb(lo,hi,marks){
@@ -833,7 +863,12 @@ function renderSheet(){
     else h+=`<div class="cards">${sec.items.map(it=>{const marks={};it.v.lh.forEach(x=>marks[x.m]={h:'lh',f:x.f});it.v.rh.forEach(x=>marks[x.m]={h:'rh',f:x.f});
       return`<div class="card"><div class="hd"><b>${it.name}</b><i>${it.roman}</i></div>${svgKb(lo,hi,marks)}<div class="nn">${it.notes.join(' · ')}</div>${st.hands===2?`<div class="hh">Izq. ${nm(it.v.lh)} · Der. ${nm(it.v.rh)}</div>`:''}</div>`}).join('')}</div>`;
     h+='</section>'});
-  if(hasLyr&&st.sheetLyr)h+=`<section class="lyrics"><span class="lbl">Letra</span><pre>${esc(song.lyrics)}</pre></section>`;
+  if(hasLyr&&st.sheetLyr){
+    const sts=song.lyrics.replace(/\r/g,'').split(/\n\s*\n/).map(x=>x.replace(/^\n+|\s+$/g,'')).filter(Boolean);
+    const len=x=>x.split('\n').length+1,total=sts.reduce((a,x)=>a+len(x),0);
+    let acc=0,cut=1,best=1e9;for(let i=1;i<=sts.length;i++){acc+=len(sts[i-1]);const d=Math.abs(total-2*acc);if(d<best){best=d;cut=i}}const col=a=>`<div>${a.map(x=>`<p>${esc(x)}</p>`).join('')}</div>`;
+    h+=`<section class="lyrics"><span class="lbl">Letra</span><div class="lycols">${col(sts.slice(0,cut))}${col(sts.slice(cut))}</div></section>`;
+  }
   $('paper').innerHTML=h;
   const framed=(()=>{try{return window.self!==window.top}catch(e){return true}})();
   $('shHint').textContent=framed?'Desde la versión de Claude no se puede imprimir. Abre tu web app para guardar el PDF.':'En el diálogo de imprimir elige «Guardar como PDF». En iPhone: botón Compartir de la vista previa → Guardar en Archivos.';
